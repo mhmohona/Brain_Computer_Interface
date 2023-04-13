@@ -1,12 +1,11 @@
 import os
 import platform
 system_platform = platform.system()
-if system_platform == "Windows":
+if system_platform == "Darwin":
+        import hid
+elif system_platform == "Windows":
         import socket  # Needed to prevent gevent crashing on Windows. (surfly / gevent issue #459)
         import pywinusb.hid as hid
-else:
-    if system_platform == "Darwin":
-        import hid
 import gevent
 from Crypto.Cipher import AES
 from Crypto import Random
@@ -259,9 +258,7 @@ def hid_enumerate():
   
 
 def is_old_model(serial_number):
-        if "GM" in serial_number[-2:]:
-                return False
-        return True
+        return "GM" not in serial_number[-2:]
 
 
 class EmotivPacket(object):
@@ -297,51 +294,51 @@ class EmotivPacket(object):
         self.sensors = sensors
 
     def handle_quality(self, sensors):
-        """
+            """
         Sets the quality value for the sensor from the quality bits in the packet data.
         Optionally will return the value.
         """
-        if self.old_model:
-            current_contact_quality = get_level(self.raw_data, quality_bits) / 540
-        else:
-            current_contact_quality = get_level(self.raw_data, quality_bits) / 1024
-        sensor = ord(self.raw_data[0])
-        if sensor == 0 or sensor == 64:
-            sensors['F3']['quality'] = current_contact_quality
-        elif sensor == 1 or sensor == 65:
-            sensors['FC5']['quality'] = current_contact_quality
-        elif sensor == 2 or sensor == 66:
-            sensors['AF3']['quality'] = current_contact_quality
-        elif sensor == 3 or sensor == 67:
-            sensors['F7']['quality'] = current_contact_quality
-        elif sensor == 4 or sensor == 68:
-            sensors['T7']['quality'] = current_contact_quality
-        elif sensor == 5 or sensor == 69:
-            sensors['P7']['quality'] = current_contact_quality
-        elif sensor == 6 or sensor == 70:
-            sensors['O1']['quality'] = current_contact_quality
-        elif sensor == 7 or sensor == 71:
-            sensors['O2']['quality'] = current_contact_quality
-        elif sensor == 8 or sensor == 72:
-            sensors['P8']['quality'] = current_contact_quality
-        elif sensor == 9 or sensor == 73:
-            sensors['T8']['quality'] = current_contact_quality
-        elif sensor == 10 or sensor == 74:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 11 or sensor == 75:
-            sensors['AF4']['quality'] = current_contact_quality
-        elif sensor == 12 or sensor == 76 or sensor == 80:
-            sensors['FC6']['quality'] = current_contact_quality
-        elif sensor == 13 or sensor == 77:
-            sensors['F4']['quality'] = current_contact_quality
-        elif sensor == 14 or sensor == 78:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 15 or sensor == 79:
-            sensors['AF4']['quality'] = current_contact_quality
-        else:
-            sensors['Unknown']['quality'] = current_contact_quality
-            sensors['Unknown']['value'] = sensor
-        return current_contact_quality
+            if self.old_model:
+                current_contact_quality = get_level(self.raw_data, quality_bits) / 540
+            else:
+                current_contact_quality = get_level(self.raw_data, quality_bits) / 1024
+            sensor = ord(self.raw_data[0])
+            if sensor in {0, 64}:
+                    sensors['F3']['quality'] = current_contact_quality
+            elif sensor in {1, 65}:
+                    sensors['FC5']['quality'] = current_contact_quality
+            elif sensor in {2, 66}:
+                    sensors['AF3']['quality'] = current_contact_quality
+            elif sensor in {3, 67}:
+                    sensors['F7']['quality'] = current_contact_quality
+            elif sensor in {4, 68}:
+                    sensors['T7']['quality'] = current_contact_quality
+            elif sensor in {5, 69}:
+                    sensors['P7']['quality'] = current_contact_quality
+            elif sensor in {6, 70}:
+                    sensors['O1']['quality'] = current_contact_quality
+            elif sensor in {7, 71}:
+                    sensors['O2']['quality'] = current_contact_quality
+            elif sensor in {8, 72}:
+                    sensors['P8']['quality'] = current_contact_quality
+            elif sensor in {9, 73}:
+                    sensors['T8']['quality'] = current_contact_quality
+            elif sensor in {10, 74}:
+                    sensors['F8']['quality'] = current_contact_quality
+            elif sensor in {11, 75}:
+                    sensors['AF4']['quality'] = current_contact_quality
+            elif sensor in {12, 76, 80}:
+                    sensors['FC6']['quality'] = current_contact_quality
+            elif sensor in {13, 77}:
+                    sensors['F4']['quality'] = current_contact_quality
+            elif sensor in {14, 78}:
+                    sensors['F8']['quality'] = current_contact_quality
+            elif sensor in {15, 79}:
+                    sensors['AF4']['quality'] = current_contact_quality
+            else:
+                    sensors['Unknown']['quality'] = current_contact_quality
+                    sensors['Unknown']['value'] = sensor
+            return current_contact_quality
 
     def __repr__(self):
         """z
@@ -494,46 +491,46 @@ class Emotiv(object):
         return True
 
     def setup_posix(self):
-        """
+            """
         Setup for headset on the Linux platform.
         Receives packets from headset and sends them to a Queue to be processed
         by the crypto greenlet.
         """
-        _os_decryption = False
-        if os.path.exists('/dev/eeg/raw'):
-            # The decryption is handled by the Linux epoc daemon. We don't need to handle it.
-            _os_decryption = True
-            hidraw = open("/dev/eeg/raw")
-        else:
-            serial, hidraw_filename = get_linux_setup()
-            self.serial_number = serial
-            if os.path.exists("/dev/" + hidraw_filename):
-                hidraw = open("/dev/" + hidraw_filename)
+            _os_decryption = False
+            if os.path.exists('/dev/eeg/raw'):
+                    # The decryption is handled by the Linux epoc daemon. We don't need to handle it.
+                    _os_decryption = True
+                    hidraw = open("/dev/eeg/raw")
             else:
-                hidraw = open("/dev/hidraw4")
-            crypto = gevent.spawn(self.setup_crypto, self.serial_number)
-        console_updater = gevent.spawn(self.update_console)
-        while self.running:
-            try:
-                data = hidraw.read(32)
-                if data != "":
-                    if _os_decryption:
-                        self.packets.put_nowait(EmotivPacket(data))
+                    serial, hidraw_filename = get_linux_setup()
+                    self.serial_number = serial
+                    if os.path.exists(f"/dev/{hidraw_filename}"):
+                            hidraw = open(f"/dev/{hidraw_filename}")
                     else:
-                        #Queue it!
-                        self.packets_received += 1
-                        tasks.put_nowait(data)
-                    gevent.sleep(0)
-                else:
-                    # No new data from the device; yield
-                    # We cannot sleep(0) here because that would go 100% CPU if both queues are empty
-                    gevent.sleep(DEVICE_POLL_INTERVAL)
-            except KeyboardInterrupt:
-                self.running = False
-        hidraw.close()
-        if not _os_decryption:
-            gevent.kill(crypto, KeyboardInterrupt)
-        gevent.kill(console_updater, KeyboardInterrupt)
+                            hidraw = open("/dev/hidraw4")
+                    crypto = gevent.spawn(self.setup_crypto, self.serial_number)
+            console_updater = gevent.spawn(self.update_console)
+            while self.running:
+                try:
+                    data = hidraw.read(32)
+                    if data != "":
+                        if _os_decryption:
+                            self.packets.put_nowait(EmotivPacket(data))
+                        else:
+                            #Queue it!
+                            self.packets_received += 1
+                            tasks.put_nowait(data)
+                        gevent.sleep(0)
+                    else:
+                        # No new data from the device; yield
+                        # We cannot sleep(0) here because that would go 100% CPU if both queues are empty
+                        gevent.sleep(DEVICE_POLL_INTERVAL)
+                except KeyboardInterrupt:
+                    self.running = False
+            hidraw.close()
+            if not _os_decryption:
+                gevent.kill(crypto, KeyboardInterrupt)
+            gevent.kill(console_updater, KeyboardInterrupt)
 
     def setup_darwin(self):
         """
